@@ -33,7 +33,7 @@ It is designed to be:
 ## Specification
 
 - [ORCP v1.0 Specification (Markdown)](spec/ORCP-v1.0.md)
-- [ORCP v1.0 Specification (Word)](spec/ORCP-v1.0.docx)
+- [ORCP v1.0 Specification (Word)](spec/ORCP_Specification_v1.0.docx)
 
 ## Client Libraries
 
