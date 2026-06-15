@@ -3,7 +3,7 @@
 ## Specification v1.1
 
 **Version:** 1.1  
-**Date:** May 2026  
+**Date:** June 2026  
 **License:** MIT  
 
 *A simple, safe, transport-agnostic protocol for robot control.*
@@ -100,6 +100,8 @@ OK COMMAND [field=value ...] <newline>
 
 The response echoes the command keyword and includes zero or more result fields. Clients MUST ignore unrecognised fields to ensure forward compatibility.
 
+Success response lines MAY exceed the 256-byte command limit defined in §2.2 (notably for `GET ALL`-style enumeration responses, which can be ~1 KB on implementations with large configuration surfaces). Hosts SHOULD provide a receive buffer of at least 2 KB and use line-buffered reads to accommodate this case. The 256-byte limit applies only to commands sent host → controller.
+
 ### 2.4 Error Response (Controller → Host)
 
 ```
@@ -167,6 +169,8 @@ CAN 2.0B at up to 1 Mbit/s. Messages use the binary encoding defined in Annex A.
 ## 4. Command Reference
 
 This section defines all ORCP commands. Commands are listed alphabetically. An implementation that supports a given conformance level (Section 9) MUST implement all commands marked as required for that level.
+
+**Syntax convention.** In the syntax examples below, parameters in square brackets are optional. Vendor-extension parameters (which opt into non-standard behaviour, e.g. `[mode=<vendor_mode>]`) appear in the same bracketed form. Standard hosts that do not supply optional or vendor parameters MUST receive the default conformant behaviour. Conformant implementations MUST reject unknown bracketed parameters they do not recognise, rather than silently ignoring them, so a host writing against the spec cannot accidentally invoke vendor-specific behaviour on a different controller. Response examples use the same descriptive placeholders (`<float>`, `<int>`, `<parameter_name>`, etc.) as the input syntax for consistency.
 
 ---
 
@@ -290,7 +294,7 @@ GET <parameter_name>
 
 **Response:**
 ```
-OK GET <n>=<value>
+OK GET <parameter_name>=<value>
 ```
 
 **Example:**
@@ -348,7 +352,7 @@ INFO
 
 **Response:**
 ```
-OK INFO fw=<version> hw=<hardware> proto=ORCP/<version> [vendor=<n>] [model=<n>] [level=<n>]
+OK INFO fw=<version> hw=<hardware> proto=ORCP/<version> [vendor=<string>] [model=<string>] [level=<int>]
 ```
 
 **Example:**
@@ -441,7 +445,7 @@ PRESET <preset_name>
 
 **Response:**
 ```
-OK PRESET name=<n> timeout_ms=<int> enable_required=<0|1> hb_required=<0|1> duty_limit=<float>
+OK PRESET name=<preset_name> timeout_ms=<int> enable_required=<0|1> hb_required=<0|1> duty_limit=<float>
 ```
 
 **Example:**
@@ -460,7 +464,7 @@ OK PRESET name=<n> timeout_ms=<int> enable_required=<0|1> hb_required=<0|1> duty
 | `hb_required` | `0`\|`1` | Whether heartbeat monitoring is active in this preset |
 | `duty_limit` | float | Active duty-cycle limit (0.0–1.0) under this preset |
 
-Implementations MUST define at least two presets: a restricted mode (low power, auto-enabled) and a full mode (full power, requires explicit enable and heartbeat). The standard preset names are `SLOW` and `NORMAL`.
+Implementations MUST define at least two presets: a restricted mode (low power, auto-enabled) and a full mode (full power, requires explicit enable). The standard preset names are `SLOW` and `NORMAL`. Heartbeat monitoring is an independent safety feature (Level 2 and above, §9): a preset MAY require it, and a controller declares this per preset via the `hb_required` field rather than it being implied by the preset being "full". A Level 1 full preset reports `hb_required=0`; a Level 2+ full preset typically reports `hb_required=1`.
 
 ---
 
@@ -508,7 +512,7 @@ SET <parameter_name>=<value>
 
 **Response:**
 ```
-OK SET <n>=<value>
+OK SET <parameter_name>=<value>
 ```
 
 **Example:**
@@ -540,7 +544,7 @@ STATUS
 
 **Response:**
 ```
-OK STATUS preset=<P> mode=<M> en=<0|1> fault=<F> estop=<0|1> tl=<f> tr=<f> vl=<f> vr=<f> dl=<f> dr=<f> lim=<f> vbat=<f> battery=<B>
+OK STATUS preset=<preset_name> mode=<mode> en=<0|1> fault=<fault_code> estop=<0|1> tl=<float> tr=<float> vl=<float> vr=<float> dl=<float> dr=<float> lim=<float> vbat=<float> battery=<battery_level>
 ```
 
 **Example:**
@@ -577,7 +581,7 @@ Immediately stop all motors using active braking. MUST bypass any acceleration l
 
 **Syntax:**
 ```
-STOP
+STOP [mode=<vendor_mode>]
 ```
 
 **Response:**
@@ -657,7 +661,7 @@ Set individual wheel side velocities directly in rad/s of the output shaft. This
 
 **Syntax:**
 ```
-WHEEL l=<float> r=<float>
+WHEEL l=<float> r=<float> [mode=<vendor_mode>]
 ```
 
 | Parameter | Type | Required | Description |
@@ -704,10 +708,12 @@ Presets group safety parameters into named configurations that can be switched a
 | Duty limit | Reduced (≤30%) | Full (100%) |
 | Command timeout | Lenient (≥1000 ms) | Tight (≤250 ms) |
 | Auto-enabled | Yes | No (requires ENABLE ON) |
-| Heartbeat required | No | Yes |
+| Heartbeat required | No | Yes at Level 2+ (see note) |
 | Intended use | Manual testing, beginners | Autonomous operation, production |
 
 The controller MUST power on in the restricted preset. This ensures safe default behaviour.
+
+Heartbeat monitoring is a Level 2+ feature (§9), not part of the definition of "full" mode. The dead-man protection that a full preset always provides is the **command timeout** (§5.4), which Level 1 requires. A Level 1 full preset is therefore conformant with `hb_required=0`; the "Yes" above applies once heartbeat monitoring is implemented (Level 2 and above). See §5.5.
 
 ### 5.2 Fault Hierarchy
 
@@ -718,7 +724,7 @@ The safety system MUST check for faults on every control tick and report the hig
 | 1 (highest) | `ESTOP` | Emergency stop hardware signal active | Release, then ENABLE ON |
 | 2 | `LOWBATT` | Battery below critical threshold | Recharge, then ENABLE ON |
 | 3 | `NOT_ENABLED` | Enable gate not set (full mode) | ENABLE ON |
-| 4 | `HEARTBEAT` | Heartbeat timeout (full mode) | HB, then ENABLE ON |
+| 4 | `HEARTBEAT` | Heartbeat timeout (presets with `hb_required=1`; Level 2+) | HB, then ENABLE ON |
 | 5 | `ENCODER_STALL` | Motor output applied but no encoder feedback observed | Diagnose wiring / sensor, then ENABLE ON |
 | 6 (lowest) | `TIMEOUT` | No motion command within timeout | Send any motion command |
 
@@ -734,7 +740,7 @@ If no motion command (CMD_VEL, WHEEL) or heartbeat (HB) is received within the c
 
 ### 5.5 Heartbeat
 
-In the full operating preset, the host MUST periodically send HB commands to prove it is alive and in control. The recommended interval is 100 ms with a default timeout of 500 ms. If the timeout expires, the controller MUST stop the motors and raise a HEARTBEAT fault.
+Heartbeat monitoring is a Level 2 and above feature (§9); it is independent of the operating preset and is not what makes "full" mode safe — the command timeout (§5.4) provides the dead-man protection at every level. Where a preset declares `hb_required=1` (typically the full preset on a Level 2+ controller), the host MUST periodically send HB commands to prove it is alive and in control. The recommended interval is 100 ms with a default timeout of 500 ms. If the timeout expires, the controller MUST stop the motors and raise a HEARTBEAT fault. A controller that does not implement heartbeat monitoring (e.g. a Level 1 implementation) reports `hb_required=0` for all presets and MUST NOT raise the HEARTBEAT fault.
 
 ### 5.6 Acceleration Limiting
 
@@ -778,7 +784,7 @@ Proactive notification of a degrading condition (e.g. low battery). The robot is
 ! FAULT <fault_code>
 ```
 
-Notification that a safety fault has been triggered and motors have been stopped. Implementations SHOULD emit `! FAULT <code>` on transition from no-fault to fault state. Hosts SHOULD treat this as authoritative notification that motors have stopped and adjust state accordingly without waiting for the next STATUS poll.
+Notification that a safety fault has been triggered and motors have been stopped. Implementations SHOULD emit `! FAULT <fault_code>` on transition from no-fault to fault state. Hosts SHOULD treat this as authoritative notification that motors have stopped and adjust state accordingly without waiting for the next STATUS poll.
 
 ---
 
@@ -821,7 +827,7 @@ Leaf names include a unit suffix only when the name alone does not carry its qua
 |-----------|------|------|----------|-------------|
 | `slow.timeout_ms` | int | ms | Yes | Command timeout in restricted mode |
 | `normal.timeout_ms` | int | ms | Yes | Command timeout in full mode |
-| `hb.timeout_ms` | int | ms | Yes | Heartbeat timeout in full mode |
+| `hb.timeout_ms` | int | ms | Yes* | Heartbeat timeout for presets that require it. *Required if heartbeat monitoring is implemented (Level 2+); see §5.5. |
 | `slow.duty_limit` | float | 0–1 | Yes | Duty limit in restricted mode |
 | `normal.duty_limit` | float | 0–1 | Yes | Duty limit in full mode |
 
@@ -993,6 +999,7 @@ For CAN-based multi-robot systems, a broadcast mechanism is RECOMMENDED. A reser
 |---------|------|-------------|
 | 1.0 | March 2026 | Initial release. ASCII message format, 15 standard commands, safety system with presets, streaming telemetry, configuration management, CAN binary encoding annex, three conformance levels. |
 | 1.1 | May 2026 | While developing the first reference implementation of v1.0 — the MC1 brushed-DC motor controller — we discovered several gaps and footguns that the spec as written did not address: closed-loop motion that silently runs away when encoders are absent or fail, ambiguous behaviour at edge values (empty parameter strings, `kin.counts_per_rev=0`), an error-code surface that collapsed distinct safety conditions into a single generic rejection, a parameter-naming convention that prefixed with underscores without ever being explicit about hierarchy, and a semantic loophole that made it easy to ship `WHEEL` with an open-loop default without violating any explicit v1.0 MUST. v1.1 is the cleanup pass that closes those gaps. Specific changes: added `NO_FEEDBACK` error code and `ENCODER_STALL` fault for feedback-sensor failures (new §5.7); defined `kin.counts_per_rev=0` as the standard way to declare a platform without encoders; mandated rejection of empty parameter values; clarified that rad/s is the only standard semantics for `WHEEL` and that any alternative control mode (e.g. duty, torque) MUST be opt-in via an explicit parameter; tightened Level 1 conformance to require stall detection where closed-loop motion is supported; switched the parameter-naming convention from flat (`kp`, `batt_low`, `slow_timeout`) to dotted hierarchical (`pid.kp`, `batt.low_v`, `slow.timeout_ms`), with all standard parameters belonging to a group and leaf names carrying unit suffixes only when otherwise ambiguous; switched the canonical unit for distance from millimetres to metres so ORCP matches ROS / Python / MATLAB robotics conventions and eliminates an inconsistency in v1.0 itself (§8's kinematic formula already used metres while §7.1 declared millimetres); renamed `wheel_diameter` to `kin.wheel_radius` so the configured value is the one used directly by the kinematic formula in §8, eliminating a hidden `/2` step the implementer previously had to perform; added `TOO_LONG` error code so command-line overflow has a defined response (v1.0 left this undefined) and `CONFIG_CONFLICT` error code so implementations can cleanly surface cross-parameter validation failures rather than overloading `BAD_VAL`; acknowledged vendor extensions to `STOP` (e.g. `COAST`) explicitly so they cannot be read as redefining the safe `BRAKE` default; tightened `! FAULT` push semantics from descriptive to SHOULD-emit-on-transition so hosts can react without polling; added an optional `level=<n>` field to the `INFO` response so implementations can declare their conformance level (§9) and hosts can adapt accordingly; added per-command response-field reference tables in §4 (CMD_VEL, ENABLE, GET, INFO, PRESET, SET, STOP, STREAM, WHEEL) so the meaning of each returned field is documented in-place rather than inferred from the example, matching the existing input-parameter tables; rewrote the §9 conformance-level descriptions to describe what each level *implements* (motion+safety; +configuration+heartbeat+streaming; +CAN+multi-device) rather than which audience it suits (hobby/research/commercial), reflecting that Level 2 is the right conformance target for most single-controller commercial products and that Level 3 is specifically about CAN-bus and multi-device-on-one-bus deployments. v1.1 contains breaking changes from v1.0. Because v1.0 did not see adoption beyond initial review, we are treating v1.1 as the first version intended for implementation. From v1.1 onward, ORCP follows strict semver: breaking changes require a major-version bump. |
+| 1.1 RC2 | June 2026 | Editorial review pass before final v1.1 tag. Items (1)–(5) are notation-only; item (6) is a normative clarification correcting an internal contradiction (erratum). Fixes: (1) §2.3 now states explicitly that success response lines MAY exceed the 256-byte command limit and hosts SHOULD provide a 2 KB receive buffer — discovered when the MC1 reference implementation's `GET ALL` response reached 908 bytes (42 keys) and risked truncating hosts that mirrored the command limit. (2) §4 preamble adds a syntax convention paragraph documenting the square-bracket form for optional and vendor-extension parameters, and stating that response examples use the same descriptive placeholders as input syntax. (3) Response syntax examples normalised across §GET (`<n>` → `<parameter_name>`), §SET (same), §INFO (`<n>` → `<string>` / `<int>` per field), §PRESET (`<n>` → `<preset_name>`), §STATUS (`<P>`/`<M>`/`<F>`/`<f>`/`<B>` → `<preset_name>`/`<mode>`/`<fault_code>`/`<float>`/`<battery_level>`), §WHEEL (`<f>` → `<float>`). (4) Vendor-extension optional parameters now appear in syntax examples — `STOP [mode=<vendor_mode>]` and `WHEEL l=<float> r=<float> [mode=<vendor_mode>]` — instead of being mentioned only in prose. (5) §6.3 prose corrected to use `! FAULT <fault_code>` matching the syntax block (was `! FAULT <code>`). (6) Resolved a contradiction between §9 and the preset definition: RC1 required Level 1 controllers to provide a "full" preset while defining "full" mode as requiring heartbeat, yet deferred heartbeat to Level 2 — making a conformant Level 1 full preset impossible. RC2 decouples heartbeat from the definition of "full" mode: the dead-man protection at every level is the command timeout (§5.4), and heartbeat is an independent Level 2+ feature that a preset declares per-instance via `hb_required`. A Level 1 full preset is conformant with `hb_required=0` and MUST NOT raise the HEARTBEAT fault. Touches §4 (PRESET), §5.1, §5.2, §5.5, §7.4. Items (1)–(5) are notation-only. Item (6) changes no parameter names, types, or wire-format details, and resolves an impossible requirement rather than tightening a satisfiable one: every implementation that was conformant under RC1 — necessarily Level 2 or above, since Level 1 could not satisfy RC1 literally — remains conformant under RC2. |
 
 ---
 

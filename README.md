@@ -32,8 +32,18 @@ It is designed to be:
 
 ## Specification
 
+**Current — ORCP v1.1**
+
+- [ORCP v1.1 Specification (Markdown)](spec/ORCP-v1.1.md)
+- [ORCP v1.1 Specification (Word)](spec/ORCP-v1.1.docx)
+
+<details>
+<summary>Previous versions</summary>
+
 - [ORCP v1.0 Specification (Markdown)](spec/ORCP-v1.0.md)
 - [ORCP v1.0 Specification (Word)](spec/ORCP_Specification_v1.0.docx)
+
+</details>
 
 ## Client Libraries
 
@@ -43,11 +53,13 @@ It is designed to be:
 
 ## Conformance Levels
 
-| Level | Name     | Use Case                    | Requirements                    |
-|-------|----------|-----------------------------|---------------------------------|
-| 1     | Basic    | Hobby, simple platforms     | Core motion + safety commands   |
-| 2     | Standard | Education, research         | Full command set + config       |
-| 3     | Extended | Commercial, multi-robot     | CAN encoding + diagnostics      |
+Choose a level by transport and topology requirements, not by whether the project is hobby, research, or commercial.
+
+| Level | Name     | Adds                                                                  | Typical transport / topology              |
+|-------|----------|-----------------------------------------------------------------------|-------------------------------------------|
+| 1     | Basic    | Motion + mandatory safety (presets, enable gate, command timeout, stall detection); parameters fixed at compile time | Any single link                           |
+| 2     | Standard | Runtime configuration with persistence, heartbeat & e-stop monitoring, telemetry streaming | USB, UART, or TCP — single controller     |
+| 3     | Extended | CAN binary encoding, multi-controller bus addressing, per-motor diagnostics | CAN fieldbus / multiple devices on one bus |
 
 ## Implementations
 
