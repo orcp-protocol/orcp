@@ -47,9 +47,9 @@ It is designed to be:
 
 ## Client Libraries
 
-- Python: *coming soon*
-- MATLAB: *coming soon*
-- ROS2: *coming soon*
+- **Python** — [`orcp`](https://github.com/orcp-protocol/orcp-python) (`pip install orcp`): Pythonic client over USB serial or WiFi, plus the `orcp-drive` keyboard teleop demo.
+- **ROS 2** — [`orcp-ros2`](https://github.com/orcp-protocol/orcp-ros2): an `rclpy` driver bridging `/cmd_vel` & `/wheel` to odometry/TF/battery/diagnostics.
+- **MATLAB** — *coming soon*
 
 ## Conformance Levels
 
@@ -63,6 +63,7 @@ Choose a level by transport and topology requirements, not by whether the projec
 
 ## Implementations
 
+- **[`orcp-sim`](https://github.com/orcp-protocol/orcp-sim)** (`pip install orcp-sim`) — reference simulator: emulates an ORCP-compliant controller (Levels 1–3) on a virtual serial port or WebSocket, no hardware. Ships device *profiles* (e.g. an MC1 profile) and accepts third-party profiles, so any host tool can be developed and tested against the protocol.
 - *Your project here — submit a PR to be listed*
 
 ## Contributing
