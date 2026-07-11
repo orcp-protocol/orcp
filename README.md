@@ -47,7 +47,7 @@ It is designed to be:
 
 ## Client Libraries
 
-- **Python** — [`orcp`](https://github.com/orcp-protocol/orcp-python) (`pip install orcp`): Pythonic client over USB serial or WiFi, plus the `orcp-drive` keyboard teleop demo.
+- **Python** — [`orcp-python`](https://github.com/orcp-protocol/orcp-python) (`pip install orcp`): Pythonic client over USB serial or WiFi, plus the `orcp-drive` keyboard teleop demo.
 - **ROS 2** — [`orcp-ros2`](https://github.com/orcp-protocol/orcp-ros2): an `rclpy` driver bridging `/cmd_vel` & `/wheel` to odometry/TF/battery/diagnostics.
 - **MATLAB** — *coming soon*
 
