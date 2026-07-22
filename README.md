@@ -64,6 +64,8 @@ Choose a level by transport and topology requirements, not by whether the projec
 ## Implementations
 
 - **[`orcp-sim`](https://github.com/orcp-protocol/orcp-sim)** (`pip install orcp-sim`) — reference simulator: emulates an ORCP-compliant controller (Levels 1–3) on a virtual serial port or WebSocket, no hardware. Ships device *profiles* (e.g. an MC1 profile) and accepts third-party profiles, so any host tool can be developed and tested against the protocol.
+- **[Motion Core](https://firstlayerrobotics.com/motion-core)** (`FLR-MC-1-2M12-4`) — hardware motion-controller board for differential-drive robots; native ORCP over USB-C (Level 2, Standard). The reference device behind the `orcp-sim` MC1 profile. By First Layer Robotics.
+
 - *Your project here — submit a PR to be listed*
 
 ## Contributing
